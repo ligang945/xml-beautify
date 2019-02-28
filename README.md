@@ -1,2 +1,7 @@
 # xml-beautify
-格式化xml
+格式化xml文件的小工具
+## 编译
+scons
+## 使用
+chmod 755 xml-beautify
+./xml-beautify you_file.xml
