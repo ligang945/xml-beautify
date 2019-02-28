@@ -4,4 +4,5 @@
 scons
 ## 使用
 chmod 755 xml-beautify
+
 ./xml-beautify you_file.xml
