@@ -1,0 +1,53 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y g++ scons
+      
+    - name: Build with SCons
+      run: scons
+      
+    - name: Test executable
+      run: |
+        chmod +x xml-beautify
+        echo '<?xml version="1.0"?><root><child>text</child></root>' > test.xml
+        ./xml-beautify test.xml
+        cat test.xml
+        
+    - name: Package artifact
+      run: |
+        mkdir -p dist
+        cp xml-beautify dist/
+        cp README.md dist/
+        cp LICENSE dist/
+        tar -czvf xml-beautify-linux-amd64.tar.gz -C dist .
+        
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Release ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        files: |
+          xml-beautify-linux-amd64.tar.gz
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
