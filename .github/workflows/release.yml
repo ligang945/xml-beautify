@@ -9,48 +9,133 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
-    
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            build_cmd: g++
+            bin_name: xml-beautify
+          - os: ubuntu-latest
+            target: linux-arm64
+            build_cmd: aarch64-linux-gnu-g++
+            bin_name: xml-beautify
+          - os: macos-latest
+            target: darwin-amd64
+            build_cmd: clang
+            bin_name: xml-beautify
+          - os: macos-latest
+            target: darwin-arm64
+            build_cmd: clang
+            bin_name: xml-beautify
+          - os: windows-latest
+            target: windows-amd64
+            build_cmd: cl
+            bin_name: xml-beautify.exe
+
+    runs-on: ${{ matrix.os }}
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
-    - name: Install dependencies
+
+    - name: Install dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
         sudo apt-get install -y g++ scons
-      
+        if [ "${{ matrix.target }}" == "linux-arm64" ]; then
+          sudo apt-get install -y g++-aarch64-linux-gnu
+        fi
+
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: brew install scons
+
+    - name: Install dependencies (Windows)
+      if: matrix.os == 'windows-latest'
+      run: pip install scons
+
+    - name: Build with C++ (Linux ARM64 cross-compile)
+      if: matrix.os == 'ubuntu-latest' && matrix.target == 'linux-arm64'
+      run: |
+        aarch64-linux-gnu-g++ -O3 -static -std=c++11 main.cpp tinyxml2.cpp -o xml-beautify
+
     - name: Build with SCons
-      run: scons
-      
-    - name: Test executable
+      if: matrix.target != 'linux-arm64'
+      run: scons CCFLAGS="-O3"
+
+    - name: Test executable (Unix)
+      if: matrix.os != 'windows-latest'
       run: |
         chmod +x xml-beautify
         echo '<?xml version="1.0"?><root><child>text</child></root>' > test.xml
         ./xml-beautify test.xml
         cat test.xml
-        
-    - name: Package artifact
+
+    - name: Test executable (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
+      run: |
+        echo '<?xml version="1.0"?><root><child>text</child></></root>' > test.xml
+        .\xml-beautify.exe test.xml
+        Get-Content test.xml
+
+    - name: Package artifact (Unix)
+      if: matrix.os != 'windows-latest'
       run: |
         mkdir -p dist
         cp xml-beautify dist/
         cp README.md dist/
         cp LICENSE dist/
-        tar -czvf xml-beautify-linux-amd64.tar.gz -C dist .
-        
+        tar -czvf xml-beautify-${{ matrix.target }}.tar.gz -C dist .
+
+    - name: Package artifact (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
+      run: |
+        mkdir dist
+        copy xml-beautify.exe dist\
+        copy README.md dist\
+        copy LICENSE dist\
+        Compress-Archive -Path dist\* -DestinationPath xml-beautify-${{ matrix.target }}.zip
+
+    - name: Upload artifact (Unix)
+      if: matrix.os != 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: xml-beautify-${{ matrix.target }}
+        path: xml-beautify-${{ matrix.target }}.tar.gz
+
+    - name: Upload artifact (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: xml-beautify-${{ matrix.target }}
+        path: xml-beautify-${{ matrix.target }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
     - name: Create Release
-      id: create_release
       uses: softprops/action-gh-release@v2
       with:
         name: Release ${{ github.ref_name }}
         draft: false
         prerelease: false
-        files: |
-          xml-beautify-linux-amd64.tar.gz
+        files: artifacts/*/*
         body: |
           ## Changes
-          
+
           See [full changelog](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}).
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
