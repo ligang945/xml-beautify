@@ -67,7 +67,7 @@ jobs:
       run: scons CCFLAGS="-O3"
 
     - name: Test executable (Unix)
-      if: matrix.os != 'windows-latest'
+      if: matrix.os != 'windows-latest' && matrix.target != 'linux-arm64' && matrix.target != 'darwin-arm64'
       run: |
         chmod +x xml-beautify
         echo '<?xml version="1.0"?><root><child>text</child></root>' > test.xml
