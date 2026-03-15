@@ -78,7 +78,7 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: pwsh
       run: |
-        echo '<?xml version="1.0"?><root><child>text</child></></root>' > test.xml
+        '<?xml version="1.0"?><root><child>text</child></root>' | Out-File test.xml
         .\xml-beautify.exe test.xml
         Get-Content test.xml
 
